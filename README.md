@@ -198,7 +198,8 @@ ln -s /etc/nginx/sites-available/reverse_proxy.conf /etc/nginx/sites-enabled/
 nginx -t
 service nginx restart
 ```
-> note: Jika anda membuat file konfigurasi baru, harap menghapus konfigurasi default nginx untuk mencegah terjadinya *conflicts* ketika dijalankan: `rm /etc/nginx/sites-enabled/default`
+> [!NOTE]
+> Jika anda membuat file konfigurasi baru, harap menghapus konfigurasi default nginx untuk mencegah terjadinya *conflicts* ketika dijalankan. Gunakan perintah berikut untuk menghapus file default: `rm /etc/nginx/sites-enabled/default`.
 
 ### 11.3 Testing
 Gunakan perintah `curl` dari node **Sirion** untuk melakukan test pada routing:
@@ -254,7 +255,7 @@ curl -u admin:sirion123 http://10.72.3.2/admin/
 Seharusnya, jika berjalan dengan baik, perintah tersebut akan memberikan output 200 OK.
 
 13. Redirect
-**Goal:** Melakukan *redirect* untuk akses ke IP **Sirion** maupun **sirion.<xxxx>.com** harus melalui **www.<xxxx>.com** sebagai hostname kanonik.
+**Goal:** Melakukan *redirect* untuk akses ke IP **Sirion** maupun **sirion.K17.com** harus melalui **www.K17.com** sebagai hostname kanonik.
 
 ### 13.1 Edit Konfigurasi
 Langkah pertama, kita perlu mengubah konfigurasi pada file konfigurasi nginx yang kita pakai pada soal sebelumnya. Buka file nginx dan ubah konfigurasi menjadi seperti berikut:
@@ -365,4 +366,34 @@ Pada terminal node **Vingilot** akan ditampilkan input log baru sebagai berikut:
 ## 15. Uji Gelombang
 **Goal:** Melakukan pengujian menggunakan **ApacheBench (ab)** dan merangkum hasil dalam tabel ringkas.
 
-### 15.1
+### 15.1 Konfigurasi
+Kita perlu menginstall **ApacheBench** pada node **Elrond** untuk melakukan pengujian gelombang.
+```bash
+apt install apache2-utils
+```
+Setelah **ApacheBench** telah terinstall, kita perlu menambahkan konfigurasi DNS pada `/etc/hosts` menggunakan perintah `nano`. Tambahkan konfigurasi berikut pada file:
+```
+10.72.3.2         www.K17.com
+```
+
+### 15.2 Testing
+Jika konfigurasi sudah dilakukan, selanjutnya kita dapat melakukan testing dengan perintah berikut untuk `/app`:
+```bash
+ab -n 500 -c 10 http://www.K17.com/app/
+```
+dan perintah berikut untuk `/static`:
+```bash
+ab -n 500 -c 10 http://www.K17.com/static/
+```
+Catat output yang didapatkan, atau juga dapat dilakukan perintah append ke dalam file untuk otomatis mencatat output dengan perintah berikut:
+```bash
+ab -n 500 -c 10 http://www.K17.com/app/ >> catatan.log
+ab -n 500 -c 10 http://www.K17.com/static/ >> catatan.log
+```
+Jika output yang didapatkan kita ringkas ke dalam tabel dengan variabel yang diminta, maka akan mendapatkan hasil seperti tabel di bawah:
+
+| Endpoint  | Req/sec  | Avg Time/Req (ms) | Transfer Rate (KB/s) |
+|------------|----------|-------------------|----------------------|
+| `/app/`    | **4670.02** | **2.141** | **1181.19** |
+| `/static/` | **4312.32** | **2.319** | **1094.92** |
+
