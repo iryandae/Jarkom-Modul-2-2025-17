@@ -397,3 +397,141 @@ Jika output yang didapatkan kita ringkas ke dalam tabel dengan variabel yang dim
 | `/app/`    | **4670.02** | **2.141** | **1181.19** |
 | `/static/` | **4312.32** | **2.319** | **1094.92** |
 
+## 16. BIND
+**Goal:** Mengubah *A Record* **Lindon**, menaikkan SOA serial pada **Tirion** dan memastikan **Valmar** ter-sinkron sebagai slave.
+
+### 16.1 Konfigurasi
+Pada node **Tirion**, ubah konfigurasi pada file *zone* `/etc/bind/k17/k17.com` menjadi sebagai berikut:
+```
+$TTL    604800
+@       IN      SOA     ns1.k17.com. root.k17.com. (
+                        2025100402 ; Serial
+                        # ... baris SOA lainnya
+                        )
+
+# ... (record NS dan A lainnya) ...
+
+lindon      30 IN       A      10.72.3.7   ;
+
+# ... (record CNAME) ...
+```
+Di bagian SOA, naikan nomor serial dari konfigurasi sebelumnya. Tambahkan juga *A Record* untuk **Lindon** pada konfigurasi file seperti di atas. Setelah itu *restart* layanan `bind9` untuk menerapkan perubahan pada file *zone* tersebut:
+```bash
+service bind9 restart
+```
+
+### 16.2 Testing
+Jalankan perintah `dig static.k17.com` pada node klien dan jika klien menerima IP baru **Lindon** (10.72.3.7), maka perubahan *A Record* di server DNS **Tirion** berhasil.
+
+## 17. Service Auto-Start Configuration
+**Goal:** Memastikan layanan inti pada setiap server (bind9 di ns1/ns2, nginx di **Sirion/Lindon**, dan PHP-FPM di **Vingilot**) dapat berjalan otomatis setelah reboot, untuk menjamin service resiliency tanpa intervensi manual.
+
+### 17.1 Konfigurasi
+Lakukan aktivasi layanan inti pada masing-masing node menggunakan perintah berikut pada node **Tirion** dan **Valmar**:
+```bash
+update-rc.d bind9 defaults
+```
+
+Pada node **Sirion**, aktifkan layanan **Nginx** dengan perintah berikut:
+```bash
+update-rc.d nginx defaults
+```
+
+Lalu, pada node **Lindon**, aktifkan layanan **Apache2** dengan perintah berikut:
+```bash
+update-rc.d apache2 defaults
+```
+
+Pada node **Vingilot**, aktifkan juga layanan **Apache2** dan **PHP-FPM** dengan perintah berikut:
+```bash
+update-rc.d apache2 defaults
+update-rc.d php8.4-fpm defaults
+```
+
+### 17.2 Testing
+Lakukan *reboot* untuk setiap node pada GNS3 menggunakan *interface* yang disediakan. Setelah sistem menyala kembali, pada node **Tirion**, jalankan perintah berikut:
+```bash
+service bind9 status
+```
+Jika didapat output `bind is running.` maka kita sudah berhasil melakukan konfigurasi *auto start*. Namun, jika output `bind is not running ... failed!` maka kemungkinan ada permasalahan pada *syntax* atau izin akses.
+
+## 18. TXT dan CNAME Record
+**Goal:** Menambahkan *record TXT* untuk `melkor.k17.com` berisi teks `"Morgoth (Melkor)"`, serta membuat record CNAME agar `morgoth.k17.com` menjadi alias yang menunjuk ke `melkor.k17.com.`. Kemudian, memverifikasi bahwa query TXT terhadap keduanya bekerja sesuai fungsi alias DNS.
+
+### 18.1 Konfigurasi
+Pada node **Tirion**, lakukan perubahan dengan menambahkan dua record baru ke *file zone* `/etc/bind/k17/k17.com` sebagai berikut:
+```
+melkor       IN       TXT      "Morgoth (Melkor)"
+morgoth      IN       CNAME    melkor.k17.com.
+```
+Setelah menambahkan record, naikan nomor serial SOA pada *file zone* untuk menandai perubahan dan lakukan *restart* pada layanan `bind9`:
+```bash
+service bind9 restart
+```
+
+### 18.2 Testing
+Pada node klien, lakukan validasi dengan menjalankan perintah `dig` untuk memastikan kedua record bekerja sesuai harapan:
+```bash
+dig melkor.k17.com TXT
+```
+Jika konfigurasi record TXT berhasil diterapkan, akan didapatkan output sebagai berikut:
+```
+melkor.k17.com.   3600   IN   TXT   "Morgoth (Melkor)"
+```
+
+Kemudian, jalankan juga perintah berikut untuk tes konfigurasi CNAME:
+```bash
+dig morgoth.k17.com TXT
+```
+Jika konfigurasi berhasil, akan didapatkan output dengan 2 baris seperti berikut:
+```
+morgoth.k17.com.  3600   IN   CNAME   melkor.k17.com.
+melkor.k17.com.   3600   IN   TXT     "Morgoth (Melkor)"
+```
+
+## 19. CNAME Alias
+**Goal:** Menambahkan record CNAME agar `havens.k17.com` menjadi alias dari `www.k17.com`, kemudian memastikan bahwa resolusi DNS dan alur rute aplikasi melalui reverse proxy berfungsi dengan benar dari dua klien berbeda.
+
+### 19.1 Konfigurasi
+Pada node **Tirion**, tambahkan konfigurasi tambahan pada *file zone* `/etc/bind/k17/k17.com`:
+```
+havens      IN       CNAME    www.k17.com.
+```
+Setelah itu, naikan nomor serial SOA untuk menandai perubahan dan lakukan *restart* pada `bind9` untuk menerapkan perubahan pada konfigurasi:
+```bash
+service bind9 restart
+```
+
+### 19.2 Testing
+Pada dua node klien yang berbeda, coba akses hostname baru `heavens.k17.com` dengan perintah berikut:
+```bash
+curl http://havens.k17.com/app/
+```
+Jika konfigurasi berhasil, kedua perintah `curl` di atas akan menampilkan output:
+```
+<h1>Halo dari Vingilot (/app)</h1>
+```
+
+## 20. Landing Page
+**Goal:** Menyediakan halaman depan berjudul **“War of Wrath: Lindon bertahan”** di server **Sirion**, yang berfungsi sebagai portal utama untuk mengakses dua layanan di belakang *reverse proxy*, yaitu `/app` dan `/static`.
+
+### 20.1 Konfigurasi
+Pada node **Sirion**, buat file `index.html` sebagai tampilan *landing page* dengan perintah berikut:
+```bash
+echo "<h1>War of Wrath: Lindon bertahan</h1>
+<a href="http://www.k17.com/app">App</a>
+<a href="http://www.k17.com/static">Static</a>" | tee /var/www/html/index.html
+```
+Karena Nginx pada Sirion telah dikonfigurasi sebelumnya untuk melayani file dari direktori `/var/www/html/` untuk path root `/`, tidak diperlukan perubahan konfigurasi tambahan pada Nginx. Namun, jika belum, bisa ditambahkan konfigurasi untuk path direktori yang diinginkan.
+
+### 20.2 Testing
+Pada node klien, lakukan akses ke *landing page* dengan perintah `curl` sebagai berikut:
+```bash
+curl http://www.k17.com/
+```
+Perintah akan memberikan output berupa isi file dari `index.html` yang ada pada node **Sirion** di dalam direktori `/var/www/html/` seperti berikut:
+```
+<h1>War of Wrath: Lindon bertahan</h1>
+<a href="http://www.k55.com/app">App</a>
+<a href="http://www.k55.com/static">Static</a>
+```
