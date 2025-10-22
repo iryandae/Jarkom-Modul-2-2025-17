@@ -532,6 +532,6 @@ curl http://www.k17.com/
 Perintah akan memberikan output berupa isi file dari `index.html` yang ada pada node **Sirion** di dalam direktori `/var/www/html/` seperti berikut:
 ```
 <h1>War of Wrath: Lindon bertahan</h1>
-<a href="http://www.k55.com/app">App</a>
-<a href="http://www.k55.com/static">Static</a>
+<a href="http://www.k17.com/app">App</a>
+<a href="http://www.k17.com/static">Static</a>
 ```
